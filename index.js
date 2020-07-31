@@ -14,7 +14,7 @@ const mongooseUniqueValidator = require('mongoose-unique-validator');
 const accessTokenSecret = process.env.JWT_TOKEN;
 
 // set port and express application
-const PORT = 8888;
+const PORT = process.env.PORT || 8888;
 const app = express();
 
 // set up middleware, help parse JSON
@@ -94,7 +94,8 @@ app.get('/view-journals', (req, res) => {
                 message: 'No journals are found.'
             });
         }
-        console.log(documents);
+
+
         res.status(200).json(documents);
     });
 });
@@ -126,14 +127,14 @@ app.post('/add-user', (req, res) => {
     function saveUser(hash) {
         userData.password = hash;
         const newUser = new Person(userData);
-       
+
         newUser.save((err, document) => {
             if (err) {
                 res.status(500).send({
                     err: err,
                     message: 'Error occured'
                 });
-            }else{
+            } else {
                 /*
                 * Generate JWT for each user
                 */
@@ -165,22 +166,80 @@ app.post('/add-user', (req, res) => {
 
 });
 
-// User Get
-app.get('/auth', (req, res) => {
+// verify user login
+app.post('/auth', (req, res) => {
     // first pull out hashed pasword using the email
-    const user = req.body;
+    let user = req.body;
 
-    Person.findOne(user.email, (err, document) => {
-        if (err) {
-            res.status(500).send({
-                message: 'No user found with that email'
-            });
-        }
-        console.log(document);
-    });
+    if (!("email" in user)) {
+        res.status(500).send({
+            message: 'Please provide an email.'
+        });
+    } else {
+        Person.findOne({ email: user.email }, (err, document) => {
+
+            if (err) { // handles db errors like validation
+                res.status(500).send({
+                    message: 'DB error',
+                    error: err
+                });
+            } else if (document === null) { // check if document exists/ if user exists
+                res.status(500).send({
+                    message: 'No user found with that email'
+                });
+            } else { /// handle if the user does not exists
+                checkPassword(document);
+            }
+        });
+    }
+
     // once you have the email you want to use the bcryp compare method
-    bcrypt.compare()
+    // bcrypt.compare()
 
+    function checkPassword(document) {
+        // handle bcrypt compare
+        bcrypt.compare(user.password, document.password, (err, result) => {
+            if (err) {
+                console.log(err);
+                // handlers errors with compare method
+                res.status(500).send({
+                    err: err
+                })
+            }
+            else if (result) {
+                // passwords do mathc
+                const doc = document.toObject();
+                delete doc.password;
+                genToken(doc);
+            } else {
+                // passwords dont mathc
+                res.status(500).send({
+                    message: 'Password is incorrect.'
+                });
+            }
+        })
+
+    }
+
+    function genToken(document) {
+        jwt.sign({
+            email: document.email
+        }, accessTokenSecret, (err, accessToken) => {
+            if (err) {
+                res.status(500).send({
+                    err: err,
+                    message: 'Cannot generate token'
+                });
+            } else {
+                res.status(200).send({
+                    message: 'User Created!',
+                    status: 200,
+                    data: document,
+                    token: accessToken
+                });
+            }
+        });
+    }
 
     // once you have th result of the campre method 1. handle error "invalid password" 2. handle success gen a jwt token for the new session
 });
