@@ -62,6 +62,9 @@ const Person = mongoose.model('Person', userSchema);
  * ===============================
 */
 
+app.get('/', (req, res) => {
+    res.send('server is ok');
+})
 // endpoint for saving new blogs
 app.post('/add-journal', (req, res) => {
     const journalData = req.body;
